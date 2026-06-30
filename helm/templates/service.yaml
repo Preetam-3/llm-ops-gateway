@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    app: llm-gateway
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: llm-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    app: llm-redis
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: llm-redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-prometheus
+  labels:
+    app: llm-prometheus
+spec:
+  ports:
+    - port: 9090
+      targetPort: 9090
+  selector:
+    app: llm-prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-grafana
+  labels:
+    app: llm-grafana
+spec:
+  type: NodePort
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30001
+  selector:
+    app: llm-grafana

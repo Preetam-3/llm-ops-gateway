@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    app: llm-gateway
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: llm-gateway
+  template:
+    metadata:
+      labels:
+        app: llm-gateway
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: GROQ_API_KEY
+            - name: GATEWAY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: GATEWAY_API_KEY
+            - name: REDIS_URL
+              value: "redis://{{ .Release.Name }}-redis:6379"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    app: llm-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-redis
+  template:
+    metadata:
+      labels:
+        app: llm-redis
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image }}"
+          ports:
+            - containerPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-prometheus
+  labels:
+    app: llm-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-prometheus
+  template:
+    metadata:
+      labels:
+        app: llm-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: "{{ .Values.prometheus.image }}"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-prometheus-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-grafana
+  labels:
+    app: llm-grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-grafana
+  template:
+    metadata:
+      labels:
+        app: llm-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image }}"
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"

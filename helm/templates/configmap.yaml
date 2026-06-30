@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+data:
+  GROQ_MODEL: {{ .Values.config.groqModel | quote }}
+  MAX_REQUESTS_PER_MINUTE: {{ .Values.config.maxRequestsPerMinute | quote }}

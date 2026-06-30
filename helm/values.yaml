@@ -1,0 +1,30 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-username/llm-ops-gateway
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: NodePort
+  port: 8000
+
+config:
+  groqModel: llama3-8b-8192
+  maxRequestsPerMinute: 30
+
+redis:
+  image: redis:7.2
+  port: 6379
+
+prometheus:
+  image: prom/prometheus:v2.52.0
+  port: 9090
+
+grafana:
+  image: grafana/grafana:11.0.0
+  port: 3000
+
+ingress:
+  enabled: false
+  host: llm-gateway.local
