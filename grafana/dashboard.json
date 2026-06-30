@@ -1,0 +1,40 @@
+{
+  "title": "LLM Ops Gateway",
+  "panels": [
+    {
+      "title": "Request Rate",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(llm_request_total[1m])", "legendFormat": "{{model}} {{status}}"}
+      ]
+    },
+    {
+      "title": "Latency (p95)",
+      "type": "graph",
+      "targets": [
+        {"expr": "histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[1m]))", "legendFormat": "{{model}}"}
+      ]
+    },
+    {
+      "title": "Token Usage",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(llm_tokens_total[1m])", "legendFormat": "{{model}} {{type}}"}
+      ]
+    },
+    {
+      "title": "Estimated Cost",
+      "type": "graph",
+      "targets": [
+        {"expr": "llm_estimated_cost_dollars", "legendFormat": "{{model}}"}
+      ]
+    },
+    {
+      "title": "Rate Limited Requests",
+      "type": "graph",
+      "targets": [
+        {"expr": "rate(llm_rate_limited_total[1m])", "legendFormat": "rate-limited"}
+      ]
+    }
+  ]
+}
