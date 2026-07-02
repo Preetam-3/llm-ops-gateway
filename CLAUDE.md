@@ -16,7 +16,7 @@
 
 ```
 Phase 1: Foundation ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%
-Phase 2: Developer Experience ━━━━━━━━━━━━━━━━━━━━□□□□□□□□□□  50%
+Phase 2: Developer Experience ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%
 Phase 3: Core Features ━━━━━□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□  20%
 Phase 4: Production Ready ━━□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□  10%
 ```
@@ -36,22 +36,27 @@ Phase 4: Production Ready ━━□□□□□□□□□□□□□□□□
 - [x] GitHub Actions CI (lint → test → build → push to ghcr.io)
 - [x] Pytest test suite (5 tests, all passing)
 - [x] Auto-venv detection in chat.py
+- [x] `docker-compose.yml` — one command to boot the full stack
+- [x] `Makefile` with common commands (run, stop, test, lint, build, chat)
+- [x] `setup.sh` — checks deps, creates .env, sets up venv in one step
+- [x] Grafana provisioning — auto-configured datasource + dashboard
+- [x] Degraded mode — works without Redis for quick testing
 
 ---
 
 ## Improvement Roadmap
 
-### Phase 2: Developer Experience (In Progress)
+### Phase 2: Developer Experience (Done)
 
 **Goal: Clone → one command → it works. No K8s required for dev.**
 
 | # | Task | Status | Priority |
 |---|---|---|---|
-| 1 | Add `docker-compose.yml` for local dev (no Helm needed) | ⬜ TODO | 🔴 High |
-| 2 | Add `Makefile` with common commands | ⬜ TODO | 🔴 High |
-| 3 | Add `setup.sh` bootstrap script | ⬜ TODO | 🔴 High |
-| 4 | Add `docker-compose.override.yml` for development | ⬜ TODO | 🟡 Medium |
-| 5 | Add health check that works without Redis (degraded mode) | ⬜ TODO | 🟡 Medium |
+| 1 | Add `docker-compose.yml` for local dev (no Helm needed) | ✅ DONE | 🔴 High |
+| 2 | Add `Makefile` with common commands | ✅ DONE | 🔴 High |
+| 3 | Add `setup.sh` bootstrap script | ✅ DONE | 🔴 High |
+| 4 | Add Grafana provisioning configs (auto datasource + dashboard) | ✅ DONE | 🟡 Medium |
+| 5 | Update config.py default model to llama-3.1 | ✅ DONE | 🟡 Medium |
 
 ### Phase 3: Core Features
 
@@ -143,26 +148,47 @@ llm-ops-gateway/
 ├── docker-compose.yml      # TODO: Add for local dev
 ├── Makefile                # TODO: Add common commands
 ├── setup.sh                # TODO: Add bootstrap script
-├── CLAUDE.md               # This file — project status & roadmap
+├── docker-compose.yml      # One-command local dev stack
+├── Makefile                # Common commands (run, test, lint, build)
+├── setup.sh                # Bootstrap script (check deps, configure, install)
 └── README.md               # Project documentation
 ```
 
 ## Commands Reference
 
 ```bash
-# Run locally (current)
+# ── One-command setup (first time) ──
+./setup.sh                    # Check deps, create .env, install Python deps
+
+# ── Run full stack (Docker Compose) ──
+make run                      # Boot gateway + Redis + Prometheus + Grafana
+
+# ── Run tests ──
+make test                     # pytest -v
+
+# ── Lint ──
+make lint                     # ruff check
+
+# ── Chat ──
+make chat MSG="your message"  # or: ./chat.py "your message"
+
+# ── View logs ──
+make logs                     # docker compose logs -f
+
+# ── Stop everything ──
+make stop                     # docker compose down
+
+# ── Build ──
+make build                    # docker build -t llm-ops-gateway .
+
+# ── Clean up ──
+make clean                    # remove containers, volumes, .venv
+
+# ── Local dev (no Docker) ──
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Run tests
-pytest -v
-
-# Lint
-ruff check app/ tests/ chat.py
-
-# CLI chat
-./chat.py "Your message"
-
-# Full K8s stack
+# ── Full K8s stack (alternative) ──
+minikube start
 helm install llm-gateway ./helm/
 kubectl port-forward svc/llm-gateway-gateway 8000:8000
 kubectl port-forward svc/llm-gateway-grafana 4000:3000

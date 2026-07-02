@@ -18,6 +18,7 @@ _venv = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin",
 if _venv != sys.executable and os.path.exists(_venv):
     os.execv(_venv, [_venv] + sys.argv)
 
+# ruff: noqa: E402
 import httpx
 from dotenv import load_dotenv
 

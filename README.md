@@ -25,33 +25,41 @@ A production-grade API gateway for LLMs with real-time Prometheus observability 
 
 ### Prerequisites
 
-- Docker
-- Minikube
-- Helm 3.15+
+- Docker & Docker Compose
 - Python 3.11+
 - [Groq API key](https://console.groq.com) (free)
 
-### Setup
+### Setup & Run
 
 ```bash
-# 1. Clone and configure
-cp .env.example .env
-# Edit .env — set GROQ_API_KEY and GATEWAY_API_KEY
+# 1. Clone and set up (one command does everything)
+chmod +x setup.sh && ./setup.sh
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Boot the full stack
+make run
 
-# 3. Start Minikube
+# 3. Chat!
+./chat.py "What is Docker?"
+
+# 4. Open Grafana dashboard
+# http://localhost:4000 (login: admin / admin)
+
+# 5. Stop when done
+make stop
+```
+
+That's it. No Minikube, no Helm, no Kubernetes needed for local development.
+The `make run` command starts the gateway, Redis, Prometheus, and Grafana with one command via Docker Compose.
+
+### Kubernetes Deployment (Alternative)
+
+For production-style deployment:
+
+```bash
 minikube start
-
-# 4. Deploy the full stack
 helm install llm-gateway ./helm/
-
-# 5. Port-forward the gateway
 kubectl port-forward svc/llm-gateway-gateway 8000:8000 &
-
-# 6. Chat!
-python chat.py "What is Docker?"
+kubectl port-forward svc/llm-gateway-grafana 4000:3000 &
 ```
 
 ### Grafana Dashboard
@@ -78,13 +86,16 @@ Visit http://localhost:8000 after port-forwarding.
 ## Project Structure
 
 ```
-├── app/              # FastAPI gateway application
-├── helm/             # Kubernetes Helm chart
-├── prometheus/       # Prometheus scrape config
-├── grafana/          # Grafana dashboard JSON
-├── tests/            # Pytest test suite
-├── ui/               # Optional chat UI (HTML/JS)
-├── chat.py           # CLI client
+├── app/                 # FastAPI gateway application
+├── helm/                # Kubernetes Helm chart
+├── prometheus/          # Prometheus scrape config
+├── grafana/             # Grafana dashboard + provisioning configs
+├── tests/               # Pytest test suite
+├── ui/                  # Optional chat UI (HTML/JS)
+├── chat.py              # CLI client
+├── docker-compose.yml   # Local dev stack (one command)
+├── Makefile             # Common commands
+├── setup.sh             # Bootstrap script
 ├── Dockerfile
 └── requirements.txt
 ```
