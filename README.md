@@ -6,7 +6,7 @@ Works with any OpenAI-compatible provider (Groq, OpenAI, etc.). Runs locally wit
 
 ## Demo
 
-<video src="https://github.com/user-attachments/assets/demo.mp4" controls width="100%"></video>
+<video src="https://raw.githubusercontent.com/Preetam-3/llm-ops-gateway/main/assets/demo.mp4" controls width="100%"></video>
 
 > *Dashboard showing real-time request metrics, latency percentiles, token usage, and cost tracking.*
 
