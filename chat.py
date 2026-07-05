@@ -32,7 +32,7 @@ def chat(message: str) -> None:
     payload = {"messages": [{"role": "user", "content": message}]}
     headers = {"Authorization": f"Bearer {API_KEY}"}
 
-    with httpx.Client(base_url=GATEWAY_URL) as client:
+    with httpx.Client(base_url=GATEWAY_URL, timeout=120.0) as client:
         resp = client.post("/v1/chat", json=payload, headers=headers)
 
     if resp.status_code == 401:
