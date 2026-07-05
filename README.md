@@ -1,25 +1,45 @@
 # LLM Ops Gateway
 
-A production-grade API gateway for LLMs with real-time Prometheus observability — token usage, latency percentiles, cost-per-request, and error rates — deployed on Kubernetes with Helm and managed via GitHub Actions CI.
+A self-hosted API gateway for LLMs with built-in monitoring — track requests, latency, token usage, cost, and rate limits through a live Grafana dashboard.
 
-## Architecture
+Works with any OpenAI-compatible provider (Groq, OpenAI, etc.). Runs locally with one command.
+
+## Demo
+
+<video src="https://github.com/user-attachments/assets/demo.mp4" controls width="100%"></video>
+
+> *Dashboard showing real-time request metrics, latency percentiles, token usage, and cost tracking.*
+
+---
+
+## How It Works
+
+You talk to LLMs through this gateway instead of calling them directly. The gateway forwards your request, collects metrics along the way, and stores them in Prometheus — which Grafana visualizes.
 
 ```
-┌──────────┐     POST /v1/chat     ┌──────────────┐     OpenAI-compatible    ┌──────────┐
-│  chat.py  │ ──────────────────►  │  FastAPI GW   │ ──────────────────────► │ Groq API │
-│ (CLI)     │ ◄──────────────────  │  (K8s Pod)    │ ◄────────────────────── │ (LLM)    │
-└──────────┘     LLM reply        └──────┬───────┘                         └──────────┘
-                                         │
-                              ┌──────────┴──────────┐
-                              │  Prometheus (scrape) │
-                              │  /metrics :8000      │
-                              └──────────┬───────────┘
-                                         │
-                                    ┌────▼────┐
-                                    │ Grafana │
-                                    │ Dashbd  │
-                                    └─────────┘
+             ┌──────────────────────────────────────────────────┐
+             │              Your Machine (localhost)             │
+             │                                                   │
+  ./chat.py  │   ┌──────────┐   POST /chat     ┌──────────┐     │   ┌─────────┐
+  "hello"    │   │ Gateway  │ ───────────────► │ Groq API │     │   │  LLM    │
+   ──────►   │   │ :8000    │ ◄─────────────── │ (cloud)  │─────┼──►│  Model  │
+  reply ◄── │   └────┬─────┘    response       └──────────┘     │   └─────────┘
+             │         │                                          │
+             │   ┌─────▼──────┐   queries    ┌──────────┐        │
+             │   │ Prometheus │ ◄──────────  │ Grafana  │        │
+             │   │ :9091      │ ──────────►  │ :4000    │        │
+             │   └────────────┘   metrics    └──────────┘        │
+             └──────────────────────────────────────────────────┘
 ```
+
+**The flow:**
+1. `chat.py` sends your message to the Gateway
+2. Gateway forwards it to Groq API (or any LLM provider)
+3. Gateway records: latency, tokens used, cost, success/error
+4. Prometheus scrapes these metrics every 5 seconds
+5. Grafana shows everything on a live dashboard
+
+---
 
 ## Quick Start
 
@@ -27,84 +47,128 @@ A production-grade API gateway for LLMs with real-time Prometheus observability 
 
 - Docker & Docker Compose
 - Python 3.11+
-- [Groq API key](https://console.groq.com) (free)
+- A free [Groq API key](https://console.groq.com)
 
-### Setup & Run
+### Setup
 
 ```bash
-# 1. Clone and set up (one command does everything)
+# One-command setup (creates .env, installs Python deps)
 chmod +x setup.sh && ./setup.sh
 
-# 2. Boot the full stack
+# Edit .env and add your Groq API key
+#   GROQ_API_KEY=gsk_your_key_here
+```
+
+### Run
+
+```bash
+# Boot everything: Gateway + Redis + Prometheus + Grafana
 make run
 
-# 3. Chat!
+# Chat with the model
 ./chat.py "What is Docker?"
 
-# 4. Open Grafana dashboard
-# http://localhost:4000 (login: admin / admin)
+# Open the dashboard
+#   http://localhost:4000    (Grafana — login: admin / admin)
+#   http://localhost:8000    (Gateway API)
 
-# 5. Stop when done
+# Stop when done
 make stop
 ```
 
-That's it. No Minikube, no Helm, no Kubernetes needed for local development.
-The `make run` command starts the gateway, Redis, Prometheus, and Grafana with one command via Docker Compose.
+That's it. No Kubernetes, no cloud setup needed.
 
-### Kubernetes Deployment (Alternative)
+---
+
+## Features
+
+**LLM Gateway**
+- Proxies requests to Groq API (or any OpenAI-compatible provider)
+- API key authentication
+- Redis-backed rate limiting (token bucket)
+- Graceful degradation — works without Redis
+
+**Observability** (all on the Grafana dashboard)
+- Request throughput (success vs error)
+- Latency percentiles (p50, p95, p99)
+- Token usage (prompt vs completion)
+- Per-request cost estimate
+- Rate-limited request tracking
+- Filter by LLM model
+
+---
+
+## Commands
+
+```bash
+make run        # Start full stack (Gateway + Redis + Prometheus + Grafana)
+make stop       # Stop everything
+make test       # Run tests
+make lint       # Lint Python code
+make build      # Build Docker image
+make clean      # Remove containers, volumes, .venv
+./chat.py "..." # Send a message via CLI
+```
+
+---
+
+## Metrics
+
+| Metric | Type | What it tracks |
+|---|---|---|
+| `llm_request_total` | Counter | Requests by model and status (success/error) |
+| `llm_request_duration_seconds` | Histogram | Request latency (p50/p95/p99) |
+| `llm_tokens_total` | Counter | Tokens used (prompt vs completion) |
+| `llm_estimated_cost_dollars` | Gauge | Estimated cost per request |
+| `llm_rate_limited_total` | Counter | Rate-limited requests |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Gateway | Python 3.11, FastAPI, httpx |
+| Monitoring | Prometheus, Grafana, prometheus-client |
+| Rate Limiting | Redis |
+| LLM Provider | Groq API (free, OpenAI-compatible) |
+| Container | Docker, Docker Compose |
+| Orchestration | Helm, Minikube *(optional)* |
+| CI/CD | GitHub Actions, GitHub Container Registry |
+
+---
+
+## Project Structure
+
+```
+├── app/                        # FastAPI gateway
+│   ├── main.py                 # Entrypoint
+│   ├── config.py               # Settings
+│   ├── routes/                 # API endpoints
+│   ├── middleware/             # Auth + rate limiting
+│   ├── proxy/                  # LLM client
+│   └── metrics/                # Prometheus metrics
+├── grafana/                    # Dashboard + provisioning
+├── prometheus/                 # Prometheus scrape config
+├── helm/                       # Kubernetes Helm chart
+├── tests/                      # Pytest suite
+├── ui/                         # Optional HTML chat UI
+├── assets/                     # Demo video
+├── chat.py                     # CLI client
+├── docker-compose.yml          # Local stack
+├── Makefile                    # Common commands
+├── setup.sh                    # Bootstrap script
+├── Dockerfile
+└── requirements.txt
+```
+
+## Kubernetes Deployment
 
 For production-style deployment:
 
 ```bash
 minikube start
 helm install llm-gateway ./helm/
-kubectl port-forward svc/llm-gateway-gateway 8000:8000 &
-kubectl port-forward svc/llm-gateway-grafana 4000:3000 &
+kubectl port-forward svc/llm-gateway-gateway 8000:8000
+kubectl port-forward svc/llm-gateway-grafana 4000:3000
 ```
-
-### Grafana Dashboard
-
-```bash
-kubectl port-forward svc/llm-gateway-grafana 4000:3000 &
-# Open http://localhost:4000 (login: admin / admin)
-```
-
-### Chat UI (Optional)
-
-Visit http://localhost:8000 after port-forwarding.
-
-## Metrics Collected
-
-| Metric | Type | Description |
-|---|---|---|
-| `llm_request_total` | Counter | Requests by model and status (success/error) |
-| `llm_request_duration_seconds` | Histogram | Latency with p50/p95/p99 percentiles |
-| `llm_tokens_total` | Counter | Prompt and completion tokens |
-| `llm_estimated_cost_dollars` | Gauge | Per-request cost estimate |
-| `llm_rate_limited_total` | Counter | Rate-limited request count |
-
-## Project Structure
-
-```
-├── app/                 # FastAPI gateway application
-├── helm/                # Kubernetes Helm chart
-├── prometheus/          # Prometheus scrape config
-├── grafana/             # Grafana dashboard + provisioning configs
-├── tests/               # Pytest test suite
-├── ui/                  # Optional chat UI (HTML/JS)
-├── chat.py              # CLI client
-├── docker-compose.yml   # Local dev stack (one command)
-├── Makefile             # Common commands
-├── setup.sh             # Bootstrap script
-├── Dockerfile
-└── requirements.txt
-```
-
-## Tech Stack
-
-**Gateway:** Python 3.11, FastAPI, httpx, Uvicorn  
-**Observability:** Prometheus, Grafana, prometheus-client  
-**Rate Limiting:** Redis (token bucket)  
-**LLM Provider:** Groq API (free, OpenAI-compatible)  
-**Infrastructure:** Docker, Minikube, Helm  
-**CI/CD:** GitHub Actions, GitHub Container Registry
