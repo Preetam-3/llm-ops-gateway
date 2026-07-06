@@ -6,7 +6,7 @@ Works with any OpenAI-compatible provider (Groq, OpenAI, etc.). Runs locally wit
 
 ## Demo
 
-<video src="https://raw.githubusercontent.com/Preetam-3/llm-ops-gateway/main/assets/demo.mp4" controls width="100%"></video>
+![Demo GIF](assets/demo-optimized.gif)
 
 > *Dashboard showing real-time request metrics, latency percentiles, token usage, and cost tracking.*
 
@@ -153,7 +153,7 @@ make clean      # Remove containers, volumes, .venv
 ├── helm/                       # Kubernetes Helm chart
 ├── tests/                      # Pytest suite
 ├── ui/                         # Optional HTML chat UI
-├── assets/                     # Demo video
+├── assets/                     # Demo GIF and MP4
 ├── chat.py                     # CLI client
 ├── docker-compose.yml          # Local stack
 ├── Makefile                    # Common commands
