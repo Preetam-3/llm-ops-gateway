@@ -29,6 +29,10 @@ class Settings:
     groq_base_url: str = "https://api.groq.com/openai/v1"
     provider_fallback: str = os.getenv("PROVIDER_FALLBACK", "")  # comma-separated, e.g. "groq,openai"
 
+    # Caching
+    cache_enabled: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+    cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "300"))
+
     # Persistence
     database_path: str = os.getenv("DATABASE_PATH", "gateway.db")
 

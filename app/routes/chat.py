@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from app.cache import cache_get, cache_set
 from app.database import (
     get_conversations,
     get_messages,
@@ -42,11 +43,23 @@ async def chat_completion(request: Request):
 
     start = time.monotonic()
 
-    try:
-        llm_response = await provider_router.chat_with_fallback(messages)
-    except Exception as e:
-        llm_request_total.labels(model="unknown", status="error").inc()
-        raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+    # Check cache
+    model_name = provider_router.get_provider().model
+    cached = await cache_get(model_name, messages)
+    if cached:
+        llm_response = cached
+        cached_hit = True
+    else:
+        cached_hit = False
+        try:
+            llm_response = await provider_router.chat_with_fallback(messages)
+        except Exception as e:
+            llm_request_total.labels(model="unknown", status="error").inc()
+            raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+
+    # Store in cache on success
+    if not cached_hit:
+        await cache_set(model_name, messages, llm_response)
 
     duration = time.monotonic() - start
 

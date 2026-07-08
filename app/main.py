@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from prometheus_client import generate_latest
 
+from app.cache import cache_clear, close_cache, init_cache
 from app.config import settings
 from app.database import close_db, init_db
 from app.middleware.auth import verify_admin_key
@@ -27,8 +28,10 @@ async def lifespan(app: FastAPI):
     init_db(settings.database_path)
     await rate_limiter.init()
     await provider_router.init()
+    await init_cache()
     yield
     await provider_router.close()
+    await close_cache()
     close_db()
 
 
@@ -48,6 +51,14 @@ async def admin_dashboard(request: Request):
     if _ADMIN_HTML is None:
         _ADMIN_HTML = _load_admin_html()
     return HTMLResponse(_ADMIN_HTML)
+
+
+@app.post("/admin/cache/clear")
+async def clear_cache(request: Request):
+    """Clear all cached LLM responses (admin only)."""
+    await verify_admin_key(request)
+    count = await cache_clear()
+    return {"status": "ok", "cleared": count, "note": "Cached LLM responses cleared"}
 
 
 @app.get("/metrics")
