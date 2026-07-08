@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from app.database import get_cost_by_model, get_cost_by_period, get_log_stats, search_request_logs
+from app.database import get_cost_by_key_prefix, get_cost_by_model, get_cost_by_period, get_log_stats, search_request_logs
 from app.middleware.auth import verify_admin_key
 
 router = APIRouter(
@@ -47,4 +47,11 @@ async def cost_by_period(period: str = Query("day", pattern="^(day|month)$")):
 async def cost_by_model():
     """Cost breakdown by model."""
     data = await get_cost_by_model()
+    return {"data": data}
+
+
+@router.get("/logs/costs/by-key")
+async def cost_by_key():
+    """Cost breakdown by API key."""
+    data = await get_cost_by_key_prefix()
     return {"data": data}

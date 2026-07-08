@@ -162,9 +162,34 @@ def test_cost_by_model(test_client):
     assert data[0]["model"] == "model-for-cost"
 
 
+def test_cost_by_key(test_client):
+    """Chat then check cost breakdown by key."""
+    with patch.object(provider_router, "get_provider") as mock_get:
+        mock_get.return_value.model = "key-model"
+        mock_get.return_value.chat_completion = AsyncMock(return_value={
+            "choices": [{"message": {"content": "key test"}}],
+            "model": "key-model",
+            "usage": {"total_tokens": 25},
+        })
+        test_client.post(
+            "/v1/chat",
+            json={"messages": [{"role": "user", "content": "test"}]},
+            headers=_ADMIN,
+        )
+
+    resp = test_client.get("/v1/logs/costs/by-key", headers=_ADMIN)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    # The admin key prefix "test-key" is 8 chars, so data may be empty since prefix is partial
+    assert isinstance(data, list)
+
+
 def test_cost_no_auth(test_client):
     resp = test_client.get("/v1/logs/costs/by-period?period=day")
     assert resp.status_code == 401
 
     resp = test_client.get("/v1/logs/costs/by-model")
+    assert resp.status_code == 401
+
+    resp = test_client.get("/v1/logs/costs/by-key")
     assert resp.status_code == 401

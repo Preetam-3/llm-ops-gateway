@@ -300,6 +300,24 @@ def _get_cost_by_model() -> list[dict]:
     return [dict(row) for row in cursor.fetchall()]
 
 
+def _get_cost_by_key_prefix() -> list[dict]:
+    """Cumulative cost grouped by API key prefix."""
+    cursor = _db.execute(
+        "SELECT r.api_key_prefix, "
+        "COALESCE(a.name, 'admin') as key_name, "
+        "COUNT(*) as requests, "
+        "COALESCE(SUM(r.prompt_tokens), 0) as prompt_tokens, "
+        "COALESCE(SUM(r.completion_tokens), 0) as completion_tokens, "
+        "COALESCE(SUM(r.total_tokens), 0) as total_tokens, "
+        "COALESCE(SUM(r.estimated_cost), 0) as cost "
+        "FROM request_logs r "
+        "LEFT JOIN api_keys a ON a.prefix = r.api_key_prefix "
+        "WHERE r.api_key_prefix IS NOT NULL "
+        "GROUP BY r.api_key_prefix ORDER BY cost DESC"
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
 # ── Public async API ──
 
 
@@ -394,3 +412,7 @@ async def get_cost_by_period(period: str = "day") -> list[dict]:
 
 async def get_cost_by_model() -> list[dict]:
     return await asyncio.to_thread(_get_cost_by_model)
+
+
+async def get_cost_by_key_prefix() -> list[dict]:
+    return await asyncio.to_thread(_get_cost_by_key_prefix)

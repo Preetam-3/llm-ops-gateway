@@ -133,7 +133,7 @@
   <button class="active" onclick="switchTab('overview')">Overview</button>
   <button onclick="switchTab('keys')">API Keys</button>
   <button onclick="switchTab('logs')">Request Logs</button>
-  <button onclick="switchTab('costs')">Cost Analytics</button>
+  <button onclick="switchTab('analytics')">Analytics</button>
 </nav>
 
 <main>
@@ -178,16 +178,28 @@
     </table>
   </div>
 
-  <!-- Costs Tab -->
-  <div id="tab-costs" class="tab">
+  <!-- Analytics Tab -->
+  <div id="tab-analytics" class="tab">
+    <div class="stats-grid" id="analytics-stats"></div>
     <div class="chart-grid">
       <div class="chart-box full">
         <h3>Daily Cost (last 30 days)</h3>
         <canvas id="daily-cost-chart"></canvas>
       </div>
-      <div class="chart-box full">
+      <div class="chart-box">
         <h3>Cost by Model</h3>
         <canvas id="model-cost-chart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Cost by API Key</h3>
+        <canvas id="key-cost-chart"></canvas>
+      </div>
+      <div class="chart-box full">
+        <h3>Usage by Key</h3>
+        <table>
+          <thead><tr><th>Key Name</th><th>Prefix</th><th>Requests</th><th>Tokens</th><th>Cost</th></tr></thead>
+          <tbody id="key-usage-table"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -210,6 +222,7 @@ const API_BASE = window.location.origin;
 let adminKey = localStorage.getItem("adminKey") || "";
 let dailyChart = null;
 let modelChart = null;
+let keyChart = null;
 
 // ── Auth ──
 function getHeaders() { return { "Authorization": `Bearer ${adminKey}`, "Content-Type": "application/json" }; }
@@ -254,8 +267,8 @@ function switchTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
   document.getElementById(`tab-${name}`).classList.add("active");
-  document.querySelector(`nav button:nth-child(${{overview:1,keys:2,logs:3,costs:4}[name]})`).classList.add("active");
-  if (name === "costs") initCharts();
+  document.querySelector(`nav button:nth-child(${{overview:1,keys:2,logs:3,analytics:4}[name]})`).classList.add("active");
+  if (name === "analytics") initCharts();
   if (name === "logs") loadLogs();
 }
 
@@ -379,10 +392,36 @@ function escapeHtml(s) {
 // ── Charts ──
 async function initCharts() {
   try {
-    const [dailyData, modelData] = await Promise.all([
+    const [dailyData, modelData, keyData, stats] = await Promise.all([
       api("/v1/logs/costs/by-period?period=day"),
       api("/v1/logs/costs/by-model"),
+      api("/v1/logs/costs/by-key"),
+      api("/v1/logs/stats"),
     ]);
+
+    // Analytics stats cards
+    document.getElementById("analytics-stats").innerHTML = `
+      <div class="stat-card"><div class="label">Total Requests</div><div class="value">${stats.stats.total_requests}</div></div>
+      <div class="stat-card"><div class="label">Total Tokens</div><div class="value">${stats.stats.total_tokens.toLocaleString()}</div></div>
+      <div class="stat-card"><div class="label">Total Cost</div><div class="value">$${Number(stats.stats.total_cost).toFixed(6)}</div></div>
+      <div class="stat-card"><div class="label">Active Keys</div><div class="value">${keyData.data.length}</div></div>
+    `;
+
+    // Per-key usage table
+    const keyTbody = document.getElementById("key-usage-table");
+    if (keyData.data.length) {
+      keyTbody.innerHTML = keyData.data.map(k => `
+        <tr>
+          <td>${k.key_name}</td>
+          <td style="font-family:monospace;color:#94a3b8">${k.api_key_prefix || "—"}</td>
+          <td>${k.requests}</td>
+          <td>${k.total_tokens.toLocaleString()}</td>
+          <td>$${Number(k.cost).toFixed(6)}</td>
+        </tr>
+      `).join("");
+    } else {
+      keyTbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No key usage data yet</p></td></tr>';
+    }
 
     // Daily cost chart
     const days = dailyData.data.slice(-30).reverse();
@@ -418,6 +457,31 @@ async function initCharts() {
           label: "Cost ($)",
           data: modelData.data.map(d => Number(d.cost).toFixed(8)),
           backgroundColor: ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626"],
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#64748b", font: { size: 11 }, callback: v => "$" + v }, grid: { color: "#1e293b" } },
+          y: { ticks: { color: "#e2e8f0", font: { size: 11 } }, grid: { display: false } },
+        },
+      },
+    });
+
+    // Per-key cost chart
+    if (keyChart) keyChart.destroy();
+    const keyColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2", "#db2777"];
+    keyChart = new Chart(document.getElementById("key-cost-chart"), {
+      type: "bar",
+      data: {
+        labels: keyData.data.map(k => k.key_name || k.api_key_prefix),
+        datasets: [{
+          label: "Cost ($)",
+          data: keyData.data.map(k => Number(k.cost).toFixed(8)),
+          backgroundColor: keyColors.slice(0, keyData.data.length),
           borderRadius: 4,
         }],
       },
