@@ -26,6 +26,7 @@ class Settings:
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "30"))
     groq_base_url: str = "https://api.groq.com/openai/v1"
+    provider_fallback: str = os.getenv("PROVIDER_FALLBACK", "")  # comma-separated, e.g. "groq,openai"
 
     # Persistence
     database_path: str = os.getenv("DATABASE_PATH", "gateway.db")

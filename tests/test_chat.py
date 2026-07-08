@@ -113,6 +113,64 @@ def _mock_provider_with_response():
 _AUTH = {"Authorization": "Bearer test-key"}
 
 
+# ── Fallback tests ──
+
+
+def _make_provider_mock(name: str, model: str = "test-model"):
+    m = MagicMock()
+    m.name = name
+    m.model = model
+    return m
+
+
+def test_chat_fallback_primary_fails_fallback_succeeds(test_client):
+    """When primary provider fails, fallback provider should handle the request."""
+    primary = _make_provider_mock("groq")
+    primary.chat_completion = MagicMock(side_effect=RuntimeError("primary down"))
+
+    fallback = _make_provider_mock("openai")
+    fallback.chat_completion = AsyncMock(return_value={
+        "choices": [{"message": {"content": "from fallback"}}],
+        "model": "gpt-4o",
+        "usage": {},
+    })
+
+    with (
+        patch.object(provider_router, "get_provider", return_value=primary),
+        patch.object(provider_router, "_providers", [primary, fallback]),
+    ):
+        resp = test_client.post(
+            "/v1/chat",
+            json={"messages": [{"role": "user", "content": "hi"}]},
+            headers=_AUTH,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["reply"] == "from fallback"
+    assert resp.json()["model"] == "gpt-4o"
+
+
+def test_chat_all_providers_fail(test_client):
+    """When all providers fail, return 502."""
+    primary = _make_provider_mock("groq")
+    primary.chat_completion = MagicMock(side_effect=RuntimeError("primary crash"))
+
+    fallback = _make_provider_mock("openai")
+    fallback.chat_completion = MagicMock(side_effect=RuntimeError("fallback crash"))
+
+    with (
+        patch.object(provider_router, "get_provider", return_value=primary),
+        patch.object(provider_router, "_providers", [primary, fallback]),
+    ):
+        resp = test_client.post(
+            "/v1/chat",
+            json={"messages": [{"role": "user", "content": "hi"}]},
+            headers=_AUTH,
+        )
+
+    assert resp.status_code == 502
+
+
 def test_chat_history_no_auth(test_client):
     resp = test_client.get("/v1/chat/history")
     assert resp.status_code == 401

@@ -42,10 +42,9 @@ async def chat_completion(request: Request):
     start = time.monotonic()
 
     try:
-        provider = provider_router.get_provider()
-        llm_response = await provider.chat_completion(messages)
+        llm_response = await provider_router.chat_with_fallback(messages)
     except Exception as e:
-        llm_request_total.labels(model=provider_router.get_provider().model, status="error").inc()
+        llm_request_total.labels(model="unknown", status="error").inc()
         raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
 
     duration = time.monotonic() - start
@@ -60,7 +59,7 @@ async def chat_completion(request: Request):
 
     # Save assistant response to DB
     reply = llm_response["choices"][0]["message"]["content"]
-    model_used = llm_response.get("model", provider.model)
+    model_used = llm_response.get("model", "unknown")
     await save_message(
         conv_id, "assistant", reply,
         model=model_used,
@@ -72,11 +71,11 @@ async def chat_completion(request: Request):
     )
 
     # Metrics
-    llm_request_total.labels(model=provider.model, status="success").inc()
-    llm_request_duration_seconds.labels(model=provider.model).observe(duration)
-    llm_tokens_total.labels(model=provider.model, type="prompt").inc(prompt_tokens)
-    llm_tokens_total.labels(model=provider.model, type="completion").inc(completion_tokens)
-    llm_estimated_cost_dollars.labels(model=provider.model).set(estimated_cost)
+    llm_request_total.labels(model=model_used, status="success").inc()
+    llm_request_duration_seconds.labels(model=model_used).observe(duration)
+    llm_tokens_total.labels(model=model_used, type="prompt").inc(prompt_tokens)
+    llm_tokens_total.labels(model=model_used, type="completion").inc(completion_tokens)
+    llm_estimated_cost_dollars.labels(model=model_used).set(estimated_cost)
 
     # Log request/response
     auth = request.headers.get("Authorization", "")
