@@ -13,6 +13,7 @@ from app.database import (
     save_conversation,
     save_message,
 )
+from app.guardrails import check_prompt, check_response
 from app.providers.token_counter import estimate_messages_tokens
 from app.metrics.collectors import (
     llm_request_total,
@@ -35,6 +36,11 @@ async def chat_completion(request: Request):
 
     if not messages:
         raise HTTPException(status_code=400, detail="messages field is required")
+
+    # Guardrail: check prompt
+    block_reason = check_prompt(messages)
+    if block_reason:
+        raise HTTPException(status_code=400, detail=block_reason)
 
     # Save user messages to DB
     await save_conversation(conv_id)
@@ -64,6 +70,13 @@ async def chat_completion(request: Request):
     duration = time.monotonic() - start
 
     usage = llm_response.get("usage", {})
+
+    # Guardrail: check response
+    reply = llm_response["choices"][0]["message"]["content"]
+    block_reason = check_response(reply)
+    if block_reason:
+        raise HTTPException(status_code=400, detail=block_reason)
+
     prompt_tokens = usage.get("prompt_tokens", 0)
     completion_tokens = usage.get("completion_tokens", 0)
     total_tokens = usage.get("total_tokens", 0)

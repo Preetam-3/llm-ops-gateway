@@ -8,6 +8,7 @@ from prometheus_client import generate_latest
 from app.cache import cache_clear, close_cache, init_cache
 from app.config import settings
 from app.database import close_db, init_db
+from app.guardrails import init_guardrails
 from app.middleware.auth import verify_admin_key
 from app.middleware.rate_limit import rate_limiter
 from app.providers.router import provider_router
@@ -29,6 +30,11 @@ async def lifespan(app: FastAPI):
     await rate_limiter.init()
     await provider_router.init()
     await init_cache()
+    init_guardrails(
+        blocklist_path=settings.guardrails_blocklist_path or None,
+        check_prompts=settings.guardrails_enabled,
+        check_responses=settings.guardrails_enabled,
+    )
     yield
     await provider_router.close()
     await close_cache()

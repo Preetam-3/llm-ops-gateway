@@ -33,6 +33,10 @@ class Settings:
     cache_enabled: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "300"))
 
+    # Guardrails
+    guardrails_enabled: bool = os.getenv("GUARDRAILS_ENABLED", "false").lower() == "true"
+    guardrails_blocklist_path: str = os.getenv("GUARDRAILS_BLOCKLIST_PATH", "")
+
     # Persistence
     database_path: str = os.getenv("DATABASE_PATH", "gateway.db")
 
