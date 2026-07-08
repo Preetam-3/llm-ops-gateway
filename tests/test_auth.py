@@ -116,3 +116,23 @@ def test_revoke_nonexistent_key(test_client):
 def test_revoke_no_auth(test_client):
     resp = test_client.delete("/v1/admin/keys/some-id")
     assert resp.status_code == 401
+
+
+# ── Admin dashboard ──
+
+
+def test_admin_dashboard_served(test_client):
+    resp = test_client.get("/admin", headers=_ADMIN)
+    assert resp.status_code == 200
+    assert "Admin Dashboard" in resp.text
+    assert "text/html" in resp.headers["content-type"]
+
+
+def test_admin_dashboard_no_auth(test_client):
+    resp = test_client.get("/admin")
+    assert resp.status_code == 401
+
+
+def test_admin_dashboard_wrong_key(test_client):
+    resp = test_client.get("/admin", headers={"Authorization": "Bearer wrong-key"})
+    assert resp.status_code == 403

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - LLM Ops Gateway</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+  /* Login overlay */
+  #login-overlay {
+    position: fixed; inset: 0; background: #0f172a; display: flex;
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  #login-overlay.hidden { display: none; }
+  #login-box { background: #1e293b; padding: 2rem; border-radius: 1rem; width: 360px; text-align: center; }
+  #login-box h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #38bdf8; }
+  #login-box p { color: #94a3b8; margin-bottom: 1.5rem; font-size: 0.875rem; }
+  #login-box input { width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 1rem; margin-bottom: 1rem; outline: none; }
+  #login-box input:focus { border-color: #38bdf8; }
+  #login-box button { width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: none; background: #2563eb; color: white; font-size: 1rem; cursor: pointer; }
+  #login-box button:hover { background: #1d4ed8; }
+  #login-error { color: #f87171; font-size: 0.875rem; margin-top: 0.5rem; }
+
+  /* Header */
+  header { background: #1e293b; padding: 0.75rem 2rem; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+  header .logout { color: #94a3b8; cursor: pointer; font-size: 0.875rem; }
+  header .logout:hover { color: #f87171; }
+
+  /* Nav tabs */
+  nav { display: flex; gap: 0; background: #1e293b; border-bottom: 1px solid #334155; padding: 0 2rem; }
+  nav button { padding: 0.75rem 1.25rem; border: none; background: none; color: #94a3b8; font-size: 0.875rem; cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button:hover { color: #e2e8f0; }
+  nav button.active { color: #38bdf8; border-bottom-color: #38bdf8; }
+
+  /* Content */
+  main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* Cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: #1e293b; border-radius: 0.75rem; padding: 1.25rem; border: 1px solid #334155; }
+  .stat-card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }
+  .stat-card .sub { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.625rem 0.75rem; border-bottom: 1px solid #1e293b; font-size: 0.875rem; }
+  th { color: #94a3b8; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { color: #e2e8f0; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 500; }
+  .badge.active { background: #065f46; color: #6ee7b7; }
+  .badge.inactive { background: #7f1d1d; color: #fca5a5; }
+
+  /* Forms */
+  .form-row { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .form-row input { flex: 1; padding: 0.625rem 0.75rem; border-radius: 0.5rem; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 0.875rem; outline: none; }
+  .form-row input:focus { border-color: #38bdf8; }
+  .btn { padding: 0.625rem 1.25rem; border-radius: 0.5rem; border: none; font-size: 0.875rem; cursor: pointer; font-weight: 500; }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-danger { background: #dc2626; color: white; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
+
+  /* Logs search */
+  .search-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .search-row input, .search-row select { padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 0.875rem; outline: none; }
+  .search-row input:focus, .search-row select:focus { border-color: #38bdf8; }
+  .search-row input[type="text"] { flex: 1; min-width: 200px; }
+
+  /* Log details toggle */
+  .log-row { cursor: pointer; }
+  .log-row:hover td { background: #1e293b; }
+  .log-detail { display: none; }
+  .log-detail.open { display: table-row; }
+  .log-detail td { padding: 0; }
+  .log-detail pre { background: #0f172a; padding: 1rem; border-radius: 0.5rem; font-size: 0.75rem; overflow-x: auto; max-height: 200px; margin: 0.5rem; color: #94a3b8; white-space: pre-wrap; }
+
+  .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+  .empty-state p { font-size: 0.875rem; }
+
+  /* Notification toast */
+  #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; color: white; font-size: 0.875rem; z-index: 200; opacity: 0; transition: opacity 0.3s; }
+  #toast.show { opacity: 1; }
+  #toast.success { background: #065f46; }
+  #toast.error { background: #991b1b; }
+
+  /* Key created modal */
+  #key-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 150; }
+  #key-modal.open { display: flex; }
+  #key-modal .modal-box { background: #1e293b; border-radius: 1rem; padding: 2rem; max-width: 480px; width: 90%; }
+  #key-modal h3 { margin-bottom: 0.5rem; }
+  #key-modal .key-display { background: #0f172a; padding: 1rem; border-radius: 0.5rem; font-family: monospace; word-break: break-all; margin: 1rem 0; color: #38bdf8; font-size: 0.875rem; }
+  #key-modal .warning { color: #fbbf24; font-size: 0.875rem; margin-bottom: 1rem; }
+  #key-modal button { width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: none; background: #2563eb; color: white; font-size: 0.875rem; cursor: pointer; }
+
+  /* Chart containers */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .chart-box { background: #1e293b; border-radius: 0.75rem; padding: 1.25rem; border: 1px solid #334155; }
+  .chart-box h3 { font-size: 0.875rem; color: #94a3b8; margin-bottom: 1rem; }
+  .chart-box.full { grid-column: 1 / -1; }
+
+  @media (max-width: 768px) {
+    .chart-grid { grid-template-columns: 1fr; }
+    nav { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login-overlay">
+  <div id="login-box">
+    <h1>LLM Ops Gateway</h1>
+    <p>Enter your admin API key to access the dashboard</p>
+    <input type="password" id="admin-key-input" placeholder="gw_..." autofocus>
+    <button onclick="login()">Sign In</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<header>
+  <h1>Admin Dashboard</h1>
+  <span class="logout" onclick="logout()">Sign Out</span>
+</header>
+
+<nav id="tabs">
+  <button class="active" onclick="switchTab('overview')">Overview</button>
+  <button onclick="switchTab('keys')">API Keys</button>
+  <button onclick="switchTab('logs')">Request Logs</button>
+  <button onclick="switchTab('costs')">Cost Analytics</button>
+</nav>
+
+<main>
+  <!-- Overview Tab -->
+  <div id="tab-overview" class="tab active">
+    <div class="stats-grid" id="stats-cards"></div>
+    <div class="chart-box full">
+      <h3>Recent Requests</h3>
+      <table>
+        <thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Status</th></tr></thead>
+        <tbody id="recent-logs"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Keys Tab -->
+  <div id="tab-keys" class="tab">
+    <div class="form-row">
+      <input type="text" id="new-key-name" placeholder="Key name (e.g. Alice)" onkeydown="if(event.key==='Enter') createKey()">
+      <button class="btn btn-primary" onclick="createKey()">Create Key</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody id="keys-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Logs Tab -->
+  <div id="tab-logs" class="tab">
+    <div class="search-row">
+      <input type="text" id="log-search" placeholder="Search requests..." onkeydown="if(event.key==='Enter') loadLogs()">
+      <select id="log-status-filter" onchange="loadLogs()">
+        <option value="">All statuses</option>
+        <option value="success">Success</option>
+        <option value="error">Error</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadLogs()">Search</button>
+    </div>
+    <table>
+      <thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Duration</th><th>Status</th></tr></thead>
+      <tbody id="logs-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Costs Tab -->
+  <div id="tab-costs" class="tab">
+    <div class="chart-grid">
+      <div class="chart-box full">
+        <h3>Daily Cost (last 30 days)</h3>
+        <canvas id="daily-cost-chart"></canvas>
+      </div>
+      <div class="chart-box full">
+        <h3>Cost by Model</h3>
+        <canvas id="model-cost-chart"></canvas>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="key-modal">
+  <div class="modal-box">
+    <h3>API Key Created</h3>
+    <p style="color:#94a3b8;font-size:0.875rem;margin-top:0.25rem;">Save this key — it will not be shown again.</p>
+    <div class="key-display" id="new-raw-key"></div>
+    <div class="warning">&#9888; This is the only time you'll see this key.</div>
+    <button onclick="closeKeyModal()">I've Saved It</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API_BASE = window.location.origin;
+let adminKey = localStorage.getItem("adminKey") || "";
+let dailyChart = null;
+let modelChart = null;
+
+// ── Auth ──
+function getHeaders() { return { "Authorization": `Bearer ${adminKey}`, "Content-Type": "application/json" }; }
+
+async function api(path, opts = {}) {
+  const resp = await fetch(`${API_BASE}${path}`, { ...opts, headers: { ...getHeaders(), ...opts.headers } });
+  if (resp.status === 401 || resp.status === 403) { logout(); throw new Error("Unauthorized"); }
+  if (!resp.ok) { const err = await resp.json().catch(() => ({detail: resp.statusText})); throw new Error(err.detail || "Request failed"); }
+  return resp.json();
+}
+
+function login() {
+  const key = document.getElementById("admin-key-input").value.trim();
+  if (!key) return;
+  adminKey = key;
+  api("/v1/logs/stats").then(() => {
+    localStorage.setItem("adminKey", key);
+    document.getElementById("login-overlay").classList.add("hidden");
+    loadAll();
+  }).catch(() => {
+    document.getElementById("login-error").textContent = "Invalid admin key";
+  });
+}
+
+function logout() {
+  localStorage.removeItem("adminKey");
+  adminKey = "";
+  document.getElementById("login-overlay").classList.remove("hidden");
+  document.getElementById("admin-key-input").value = "";
+}
+
+// Check for saved key on load
+if (adminKey) {
+  api("/v1/logs/stats").then(() => {
+    document.getElementById("login-overlay").classList.add("hidden");
+    loadAll();
+  }).catch(() => localStorage.removeItem("adminKey"));
+}
+
+// ── Tab switching ──
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  document.querySelector(`nav button:nth-child(${{overview:1,keys:2,logs:3,costs:4}[name]})`).classList.add("active");
+  if (name === "costs") initCharts();
+  if (name === "logs") loadLogs();
+}
+
+// ── Toast ──
+function toast(msg, type = "success") {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = `show ${type}`;
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+// ── Overview ──
+async function loadStats() {
+  try {
+    const { stats } = await api("/v1/logs/stats");
+    document.getElementById("stats-cards").innerHTML = `
+      <div class="stat-card"><div class="label">Requests</div><div class="value">${stats.total_requests}</div></div>
+      <div class="stat-card"><div class="label">Total Tokens</div><div class="value">${stats.total_tokens.toLocaleString()}</div><div class="sub">${stats.total_prompt_tokens.toLocaleString()} prompt / ${stats.total_completion_tokens.toLocaleString()} completion</div></div>
+      <div class="stat-card"><div class="label">Total Cost</div><div class="value">$${Number(stats.total_cost).toFixed(6)}</div></div>
+      <div class="stat-card"><div class="label">Avg Duration</div><div class="value">${Number(stats.avg_duration).toFixed(2)}s</div></div>
+    `;
+  } catch (e) { /* stats may be empty */ }
+}
+
+async function loadRecentLogs() {
+  try {
+    const { logs } = await api("/v1/logs?limit=10");
+    const tbody = document.getElementById("recent-logs");
+    if (!logs.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No requests yet</p></td></tr>'; return; }
+    tbody.innerHTML = logs.map(l => `
+      <tr><td>${l.created_at || ""}</td><td>${l.model || "—"}</td><td>${l.total_tokens || 0}</td><td>$${Number(l.estimated_cost || 0).toFixed(8)}</td><td><span class="badge ${l.status === "error" ? "inactive" : "active"}">${l.status || "success"}</span></td></tr>
+    `).join("");
+  } catch (e) { /* empty */ }
+}
+
+// ── Keys ──
+async function loadKeys() {
+  try {
+    const data = await api("/v1/admin/keys");
+    const tbody = document.getElementById("keys-list");
+    if (!data.keys.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No API keys created yet</p></td></tr>'; return; }
+    tbody.innerHTML = data.keys.map(k => `
+      <tr>
+        <td>${k.name}</td>
+        <td style="font-family:monospace;color:#94a3b8">${k.prefix}...</td>
+        <td>${k.created_at || ""}</td>
+        <td><span class="badge ${k.is_active ? "active" : "inactive"}">${k.is_active ? "Active" : "Revoked"}</span></td>
+        <td>${k.is_active ? `<button class="btn btn-danger btn-sm" onclick="revokeKey('${k.id}')">Revoke</button>` : "—"}</td>
+      </tr>
+    `).join("");
+  } catch (e) { /* empty */ }
+}
+
+async function createKey() {
+  const name = document.getElementById("new-key-name").value.trim();
+  if (!name) { toast("Enter a key name", "error"); return; }
+  try {
+    const data = await api("/v1/admin/keys", { method: "POST", body: JSON.stringify({ name }) });
+    document.getElementById("new-raw-key").textContent = data.raw_key;
+    document.getElementById("key-modal").classList.add("open");
+    document.getElementById("new-key-name").value = "";
+    loadKeys();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+function closeKeyModal() { document.getElementById("key-modal").classList.remove("open"); }
+
+async function revokeKey(id) {
+  if (!confirm("Revoke this key? This cannot be undone.")) return;
+  try {
+    await api(`/v1/admin/keys/${id}`, { method: "DELETE" });
+    toast("Key revoked");
+    loadKeys();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+// ── Logs ──
+async function loadLogs() {
+  const q = document.getElementById("log-search").value.trim();
+  const status = document.getElementById("log-status-filter").value;
+  let path = "/v1/logs?limit=50";
+  if (q) path += `&q=${encodeURIComponent(q)}`;
+  if (status) path += `&status=${status}`;
+  try {
+    const { logs } = await api(path);
+    const tbody = document.getElementById("logs-list");
+    if (!logs.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No matching logs</p></td></tr>'; return; }
+    tbody.innerHTML = logs.map((l, i) => `
+      <tr class="log-row" onclick="toggleLogDetail(${i})">
+        <td>${l.created_at || ""}</td>
+        <td>${l.model || "—"}</td>
+        <td>${l.total_tokens || 0}</td>
+        <td>${l.duration_seconds ? Number(l.duration_seconds).toFixed(2) + "s" : "—"}</td>
+        <td><span class="badge ${l.status === "error" ? "inactive" : "active"}">${l.status || "success"}</span></td>
+      </tr>
+      <tr class="log-detail" id="log-detail-${i}">
+        <td colspan="5">
+          <pre><strong>Request:</strong>\n${escapeHtml(JSON.stringify(JSON.parse(l.request_body || "{}"), null, 2))}\n\n<strong>Response:</strong>\n${escapeHtml(JSON.stringify(JSON.parse(l.response_body || "{}"), null, 2))}</pre>
+        </td>
+      </tr>
+    `).join("");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+let openDetail = null;
+function toggleLogDetail(i) {
+  const el = document.getElementById(`log-detail-${i}`);
+  if (openDetail !== null && openDetail !== i) {
+    const prev = document.getElementById(`log-detail-${openDetail}`);
+    if (prev) prev.classList.remove("open");
+  }
+  el.classList.toggle("open");
+  openDetail = el.classList.contains("open") ? i : null;
+}
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ── Charts ──
+async function initCharts() {
+  try {
+    const [dailyData, modelData] = await Promise.all([
+      api("/v1/logs/costs/by-period?period=day"),
+      api("/v1/logs/costs/by-model"),
+    ]);
+
+    // Daily cost chart
+    const days = dailyData.data.slice(-30).reverse();
+    if (dailyChart) dailyChart.destroy();
+    dailyChart = new Chart(document.getElementById("daily-cost-chart"), {
+      type: "bar",
+      data: {
+        labels: days.map(d => d.period),
+        datasets: [{
+          label: "Cost ($)",
+          data: days.map(d => Number(d.cost).toFixed(8)),
+          backgroundColor: "#2563eb",
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#64748b", font: { size: 11 } }, grid: { color: "#1e293b" } },
+          y: { ticks: { color: "#64748b", font: { size: 11 }, callback: v => "$" + v }, grid: { color: "#1e293b" } },
+        },
+      },
+    });
+
+    // Model cost chart
+    if (modelChart) modelChart.destroy();
+    modelChart = new Chart(document.getElementById("model-cost-chart"), {
+      type: "bar",
+      data: {
+        labels: modelData.data.map(d => d.model),
+        datasets: [{
+          label: "Cost ($)",
+          data: modelData.data.map(d => Number(d.cost).toFixed(8)),
+          backgroundColor: ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626"],
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#64748b", font: { size: 11 }, callback: v => "$" + v }, grid: { color: "#1e293b" } },
+          y: { ticks: { color: "#e2e8f0", font: { size: 11 } }, grid: { display: false } },
+        },
+      },
+    });
+  } catch (e) { /* charts may be empty */ }
+}
+
+// ── Load all ──
+function loadAll() {
+  loadStats();
+  loadRecentLogs();
+  loadKeys();
+  loadLogs();
+}
+</script>
+</body>
+</html>
