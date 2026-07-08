@@ -14,14 +14,26 @@ class TokenBucketRateLimiter:
     async def check(self, request: Request) -> None:
         if self.redis is None:
             return  # redis unavailable, allow through
+
+        # Key-based rate limit
         api_key = request.headers.get("Authorization", "").removeprefix("Bearer ")
-        key = f"rate_limit:{api_key}"
-        current = await self.redis.get(key)
+        key_key = f"rate_limit:key:{api_key}"
+        current = await self.redis.get(key_key)
         if current is not None and int(current) >= settings.max_requests_per_minute:
             llm_rate_limited_total.inc()
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
-        await self.redis.incr(key)
-        await self.redis.expire(key, 60, nx=True)
+            raise HTTPException(status_code=429, detail="Rate limit exceeded (key)")
+        await self.redis.incr(key_key)
+        await self.redis.expire(key_key, 60, nx=True)
+
+        # IP-based rate limit
+        client_ip = request.client.host if request.client else "unknown"
+        ip_key = f"rate_limit:ip:{client_ip}"
+        ip_current = await self.redis.get(ip_key)
+        if ip_current is not None and int(ip_current) >= settings.max_requests_per_minute_per_ip:
+            llm_rate_limited_total.inc()
+            raise HTTPException(status_code=429, detail="Rate limit exceeded (IP)")
+        await self.redis.incr(ip_key)
+        await self.redis.expire(ip_key, 60, nx=True)
 
 
 rate_limiter = TokenBucketRateLimiter()
