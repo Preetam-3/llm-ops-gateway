@@ -37,6 +37,9 @@ class Settings:
     guardrails_enabled: bool = os.getenv("GUARDRAILS_ENABLED", "false").lower() == "true"
     guardrails_blocklist_path: str = os.getenv("GUARDRAILS_BLOCKLIST_PATH", "")
 
+    # Webhooks
+    webhook_url: str = os.getenv("WEBHOOK_URL", "")  # Slack-compatible webhook URL
+
     # Persistence
     database_path: str = os.getenv("DATABASE_PATH", "gateway.db")
 
