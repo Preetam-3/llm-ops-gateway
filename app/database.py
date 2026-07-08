@@ -45,8 +45,26 @@ def init_db(db_path: str) -> None:
             created_at  TIMESTAMP DEFAULT (datetime('now')),
             revoked_at  TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS request_logs (
+            id                TEXT PRIMARY KEY,
+            conversation_id   TEXT,
+            request_body      TEXT,
+            response_body     TEXT,
+            model             TEXT,
+            prompt_tokens     INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens      INTEGER DEFAULT 0,
+            estimated_cost    REAL DEFAULT 0,
+            duration_seconds  REAL DEFAULT 0,
+            ip_address        TEXT,
+            api_key_prefix    TEXT,
+            status            TEXT DEFAULT 'success',
+            created_at        TIMESTAMP DEFAULT (datetime('now'))
+        );
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+        CREATE INDEX IF NOT EXISTS idx_request_logs_created ON request_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_request_logs_model ON request_logs(model);
     """)
     _db.commit()
 
@@ -164,6 +182,90 @@ def _get_api_key_by_hash(key_hash: str) -> dict | None:
     return dict(row) if row else None
 
 
+# ── Request log helpers ──
+
+
+def _log_request(
+    conversation_id: str | None = None,
+    request_body: str | None = None,
+    response_body: str | None = None,
+    model: str | None = None,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0,
+    estimated_cost: float = 0.0,
+    duration_seconds: float = 0.0,
+    ip_address: str | None = None,
+    api_key_prefix: str | None = None,
+    status: str = "success",
+) -> str:
+    log_id = str(uuid.uuid4())
+    _db.execute(
+        """INSERT INTO request_logs
+           (id, conversation_id, request_body, response_body, model,
+            prompt_tokens, completion_tokens, total_tokens,
+            estimated_cost, duration_seconds, ip_address, api_key_prefix, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            log_id, conversation_id, request_body, response_body, model,
+            prompt_tokens, completion_tokens, total_tokens,
+            estimated_cost, duration_seconds, ip_address, api_key_prefix, status,
+        ),
+    )
+    _db.commit()
+    return log_id
+
+
+def _search_request_logs(
+    q: str | None = None,
+    model: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    conditions = []
+    params: list = []
+
+    if q:
+        conditions.append("(request_body LIKE ? OR response_body LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%"])
+    if model:
+        conditions.append("model = ?")
+        params.append(model)
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if start_date:
+        conditions.append("created_at >= ?")
+        params.append(start_date)
+    if end_date:
+        conditions.append("created_at <= ?")
+        params.append(end_date)
+
+    where = " AND ".join(conditions) if conditions else "1"
+    cursor = _db.execute(
+        f"SELECT * FROM request_logs WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (*params, limit, offset),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def _get_log_stats() -> dict:
+    """Aggregate stats across all request logs."""
+    cursor = _db.execute(
+        "SELECT COUNT(*) as total_requests, "
+        "COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens, "
+        "COALESCE(SUM(completion_tokens), 0) as total_completion_tokens, "
+        "COALESCE(SUM(total_tokens), 0) as total_tokens, "
+        "COALESCE(SUM(estimated_cost), 0) as total_cost, "
+        "COALESCE(AVG(duration_seconds), 0) as avg_duration "
+        "FROM request_logs"
+    )
+    return dict(cursor.fetchone())
+
+
 # ── Public async API ──
 
 
@@ -211,3 +313,42 @@ async def revoke_api_key(key_id: str) -> bool:
 
 async def get_api_key_by_hash(key_hash: str) -> dict | None:
     return await asyncio.to_thread(_get_api_key_by_hash, key_hash)
+
+
+async def log_request(
+    conversation_id: str | None = None,
+    request_body: str | None = None,
+    response_body: str | None = None,
+    model: str | None = None,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0,
+    estimated_cost: float = 0.0,
+    duration_seconds: float = 0.0,
+    ip_address: str | None = None,
+    api_key_prefix: str | None = None,
+    status: str = "success",
+) -> str:
+    return await asyncio.to_thread(
+        _log_request, conversation_id, request_body, response_body, model,
+        prompt_tokens, completion_tokens, total_tokens,
+        estimated_cost, duration_seconds, ip_address, api_key_prefix, status,
+    )
+
+
+async def search_request_logs(
+    q: str | None = None,
+    model: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    return await asyncio.to_thread(
+        _search_request_logs, q, model, status, start_date, end_date, limit, offset,
+    )
+
+
+async def get_log_stats() -> dict:
+    return await asyncio.to_thread(_get_log_stats)

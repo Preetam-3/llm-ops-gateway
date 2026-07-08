@@ -7,7 +7,7 @@ from app.config import settings
 from app.database import close_db, init_db
 from app.middleware.rate_limit import rate_limiter
 from app.providers.router import provider_router
-from app.routes import health, chat, keys
+from app.routes import health, chat, keys, logs
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app = FastAPI(title="LLM Ops Gateway", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(keys.router)
+app.include_router(logs.router)
 
 
 @app.get("/metrics")

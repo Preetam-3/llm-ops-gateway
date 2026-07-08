@@ -5,7 +5,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from app.database import get_conversations, get_messages, save_conversation, save_message
+from app.database import (
+    get_conversations,
+    get_messages,
+    log_request,
+    save_conversation,
+    save_message,
+)
 from app.metrics.collectors import (
     llm_request_total,
     llm_request_duration_seconds,
@@ -72,6 +78,23 @@ async def chat_completion(request: Request):
     llm_tokens_total.labels(model=provider.model, type="completion").inc(completion_tokens)
     llm_estimated_cost_dollars.labels(model=provider.model).set(estimated_cost)
 
+    # Log request/response
+    auth = request.headers.get("Authorization", "")
+    key_prefix = auth[7:17] if auth.startswith("Bearer ") else None
+    await log_request(
+        conversation_id=conv_id,
+        request_body=json.dumps({"messages": messages}),
+        response_body=json.dumps({"reply": reply, "model": model_used, "usage": usage}),
+        model=model_used,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        estimated_cost=estimated_cost,
+        duration_seconds=duration,
+        ip_address=request.client.host if request.client else None,
+        api_key_prefix=key_prefix,
+    )
+
     return {
         "conversation_id": conv_id,
         "reply": reply,
@@ -127,9 +150,28 @@ async def chat_completion_stream(request: Request):
             llm_request_total.labels(model=model_used, status="success").inc()
             llm_request_duration_seconds.labels(model=model_used).observe(duration)
 
+            # Log request/response (non-blocking after stream done)
+            await log_request(
+                conversation_id=conv_id,
+                request_body=json.dumps({"messages": messages}),
+                response_body=json.dumps({"reply": full_content, "model": model_used}),
+                model=model_used,
+                duration_seconds=duration,
+                status="success",
+            )
+
         except Exception as e:
             llm_request_total.labels(model=model_used, status="error").inc()
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            # Log the error
+            await log_request(
+                conversation_id=conv_id,
+                request_body=json.dumps({"messages": messages}),
+                response_body=json.dumps({"error": str(e)}),
+                model=model_used,
+                duration_seconds=time.monotonic() - start,
+                status="error",
+            )
         finally:
             yield f"data: {json.dumps({'conversation_id': conv_id})}\n\n"
             yield "data: [DONE]\n\n"
