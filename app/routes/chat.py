@@ -12,6 +12,7 @@ from app.database import (
     save_conversation,
     save_message,
 )
+from app.providers.token_counter import estimate_messages_tokens
 from app.metrics.collectors import (
     llm_request_total,
     llm_request_duration_seconds,
@@ -192,6 +193,21 @@ async def chat_history(
 ):
     conversations = await get_conversations(limit=limit, offset=offset)
     return {"conversations": conversations, "limit": limit, "offset": offset}
+
+
+@router.post("/v1/chat/estimate")
+async def estimate_tokens_endpoint(request: Request):
+    """Estimate token count for a list of messages before sending."""
+    body = await request.json()
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(status_code=400, detail="messages field is required")
+    estimated = estimate_messages_tokens(messages)
+    return {
+        "estimated_tokens": estimated,
+        "messages_count": len(messages),
+        "note": "Rough estimate based on character count. Actual tokens may vary.",
+    }
 
 
 @router.get("/v1/chat/history/{conv_id}")

@@ -236,3 +236,35 @@ def test_chat_stream_upstream_error(test_client):
     assert resp.status_code == 200  # SSE stream with error event inside
     assert "Upstream failure" in resp.text
     assert "[DONE]" in resp.text
+
+
+# ── Token estimate tests ──
+
+
+def test_estimate_tokens(test_client):
+    resp = test_client.post(
+        "/v1/chat/estimate",
+        json={"messages": [{"role": "user", "content": "hello world"}]},
+        headers=_AUTH,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["estimated_tokens"] > 0
+    assert data["messages_count"] == 1
+
+
+def test_estimate_tokens_empty_messages(test_client):
+    resp = test_client.post(
+        "/v1/chat/estimate",
+        json={"messages": []},
+        headers=_AUTH,
+    )
+    assert resp.status_code == 400
+
+
+def test_estimate_tokens_no_auth(test_client):
+    resp = test_client.post(
+        "/v1/chat/estimate",
+        json={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert resp.status_code == 401
