@@ -1,6 +1,8 @@
 """SQLite persistence layer — stores conversations and messages locally."""
 
 import asyncio
+import hashlib
+import secrets
 import sqlite3
 import uuid
 
@@ -33,6 +35,15 @@ def init_db(db_path: str) -> None:
             duration_seconds  REAL    DEFAULT 0,
             created_at        TIMESTAMP DEFAULT (datetime('now')),
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+        );
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id          TEXT PRIMARY KEY,
+            key_hash    TEXT NOT NULL UNIQUE,
+            name        TEXT NOT NULL,
+            prefix      TEXT NOT NULL,
+            is_active   INTEGER DEFAULT 1,
+            created_at  TIMESTAMP DEFAULT (datetime('now')),
+            revoked_at  TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
@@ -109,6 +120,50 @@ def _get_messages(conv_id: str) -> list[dict]:
     return [dict(row) for row in cursor.fetchall()]
 
 
+# ── API key helpers ──
+
+
+def _create_api_key(name: str) -> dict:
+    """Generate a key, store its hash, return the raw key (shown once)."""
+    raw_key = "gw_" + secrets.token_hex(16)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:10]  # e.g. "gw_a1b2c3d4"
+    key_id = str(uuid.uuid4())
+    _db.execute(
+        "INSERT INTO api_keys (id, key_hash, name, prefix) VALUES (?, ?, ?, ?)",
+        (key_id, key_hash, name, prefix),
+    )
+    _db.commit()
+    return {"id": key_id, "raw_key": raw_key, "name": name, "prefix": prefix}
+
+
+def _list_api_keys() -> list[dict]:
+    cursor = _db.execute(
+        "SELECT id, name, prefix, is_active, created_at, revoked_at "
+        "FROM api_keys ORDER BY created_at DESC"
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def _revoke_api_key(key_id: str) -> bool:
+    cursor = _db.execute(
+        "UPDATE api_keys SET is_active = 0, revoked_at = datetime('now') "
+        "WHERE id = ? AND is_active = 1",
+        (key_id,),
+    )
+    _db.commit()
+    return cursor.rowcount > 0
+
+
+def _get_api_key_by_hash(key_hash: str) -> dict | None:
+    cursor = _db.execute(
+        "SELECT id, name, prefix, is_active FROM api_keys WHERE key_hash = ?",
+        (key_hash,),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
 # ── Public async API ──
 
 
@@ -140,3 +195,19 @@ async def get_conversations(limit: int = 20, offset: int = 0) -> list[dict]:
 
 async def get_messages(conv_id: str) -> list[dict]:
     return await asyncio.to_thread(_get_messages, conv_id)
+
+
+async def create_api_key(name: str) -> dict:
+    return await asyncio.to_thread(_create_api_key, name)
+
+
+async def list_api_keys() -> list[dict]:
+    return await asyncio.to_thread(_list_api_keys)
+
+
+async def revoke_api_key(key_id: str) -> bool:
+    return await asyncio.to_thread(_revoke_api_key, key_id)
+
+
+async def get_api_key_by_hash(key_hash: str) -> dict | None:
+    return await asyncio.to_thread(_get_api_key_by_hash, key_hash)
