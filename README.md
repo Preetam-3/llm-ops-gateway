@@ -83,10 +83,14 @@ That's it. No Kubernetes, no cloud setup needed.
 ## Features
 
 **LLM Gateway**
-- Proxies requests to Groq API (or any OpenAI-compatible provider)
+- Proxies requests to Groq, OpenAI, or Anthropic (provider abstraction)
+- SSE streaming — tokens arrive word-by-word
 - API key authentication
 - Redis-backed rate limiting (token bucket)
 - Graceful degradation — works without Redis
+- SQLite persistence — conversation history stored locally
+- Conversation history API (`GET /v1/chat/history`)
+- System-wide CLI (`make install` then just `chat "message"`)
 
 **Observability** (all on the Grafana dashboard)
 - Request throughput (success vs error)
@@ -106,8 +110,12 @@ make stop       # Stop everything
 make test       # Run tests
 make lint       # Lint Python code
 make build      # Build Docker image
+make install    # Install 'chat' command system-wide ($HOME/.local/bin/chat)
 make clean      # Remove containers, volumes, .venv
 ./chat.py "..." # Send a message via CLI
+chat -s "..."   # Stream tokens as they arrive (after make install)
+chat --history  # Browse past conversations
+chat -c <id> "message"  # Continue a specific conversation
 ```
 
 ---
@@ -131,7 +139,8 @@ make clean      # Remove containers, volumes, .venv
 | Gateway | Python 3.11, FastAPI, httpx |
 | Monitoring | Prometheus, Grafana, prometheus-client |
 | Rate Limiting | Redis |
-| LLM Provider | Groq API (free, OpenAI-compatible) |
+| LLM Providers | Groq (default), OpenAI, Anthropic |
+| Persistence | SQLite |
 | Container | Docker, Docker Compose |
 | Orchestration | Helm, Minikube *(optional)* |
 | CI/CD | GitHub Actions, GitHub Container Registry |
@@ -144,9 +153,15 @@ make clean      # Remove containers, volumes, .venv
 ├── app/                        # FastAPI gateway
 │   ├── main.py                 # Entrypoint
 │   ├── config.py               # Settings
+│   ├── database.py             # SQLite persistence layer
+│   ├── providers/              # Multi-provider LLM abstraction
+│   │   ├── base.py             # Abstract provider interface
+│   │   ├── openai_like.py      # OpenAI-compatible (Groq, OpenAI)
+│   │   ├── anthropic.py        # Anthropic client
+│   │   └── router.py           # Provider selection
 │   ├── routes/                 # API endpoints
 │   ├── middleware/             # Auth + rate limiting
-│   ├── proxy/                  # LLM client
+│   ├── proxy/                  # Legacy LLM client
 │   └── metrics/                # Prometheus metrics
 ├── grafana/                    # Dashboard + provisioning
 ├── prometheus/                 # Prometheus scrape config

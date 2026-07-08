@@ -1,4 +1,4 @@
-.PHONY: setup run stop test lint build chat logs clean help
+.PHONY: setup run stop test lint build chat logs clean install help
 
 setup:           ## First-time setup: check deps, configure .env, create venv
 	@bash setup.sh
@@ -34,6 +34,13 @@ clean:           ## Remove containers, volumes, and temp files
 	docker compose down -v
 	rm -rf .venv __pycache__ .pytest_cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
+
+install:         ## Install 'chat' command system-wide (symlink to ~/.local/bin)
+	mkdir -p $(HOME)/.local/bin
+	ln -sf $(PWD)/chat.py $(HOME)/.local/bin/chat
+	@echo "Installed: $(HOME)/.local/bin/chat -> $(PWD)/chat.py"
+	@echo "Make sure ~/.local/bin is in your PATH."
+	@echo "Then use: chat \"your message\""
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

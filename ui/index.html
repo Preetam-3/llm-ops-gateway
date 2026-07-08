@@ -58,7 +58,7 @@ async function send() {
   inputEl.value = '';
   sendEl.disabled = true;
   try {
-    const resp = await fetch('/v1/chat', {
+    const resp = await fetch('/v1/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_KEY },
       body: JSON.stringify({ messages: [{ role: 'user', content: text }] })
@@ -68,8 +68,37 @@ async function send() {
       addMessage('Error ' + resp.status + ': ' + err, 'error');
       return;
     }
-    const data = await resp.json();
-    addMessage(data.reply, 'assistant', `Model: ${data.model} | Tokens: ${data.usage.total_tokens} | Cost: $${data.estimated_cost} | ${data.duration_seconds}s`);
+    // Placeholder assistant message — text will stream in
+    const assistantDiv = document.createElement('div');
+    assistantDiv.className = 'msg assistant';
+    messagesEl.appendChild(assistantDiv);
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const dataStr = trimmed.slice(6);
+        if (dataStr === '[DONE]') continue;
+        try {
+          const event = JSON.parse(dataStr);
+          if (event.content) {
+            assistantDiv.textContent += event.content;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+          if (event.error) {
+            assistantDiv.className = 'msg error';
+            assistantDiv.textContent = 'Error: ' + event.error;
+          }
+        } catch (_) { /* skip malformed JSON */ }
+      }
+    }
   } catch (e) {
     addMessage('Network error: ' + e.message, 'error');
   } finally {

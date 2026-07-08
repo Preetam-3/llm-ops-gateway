@@ -1,29 +1,40 @@
+"""LLM provider for OpenAI-compatible APIs (OpenAI, Groq, etc.)."""
+
 import json
 
 import httpx
-from app.config import settings
+
+from app.providers.base import BaseLLMProvider
 
 
-class GroqClient:
-    """Async HTTP client for the Groq API (OpenAI-compatible)."""
+class OpenAILikeProvider(BaseLLMProvider):
+    """Client for any OpenAI-compatible chat completion API."""
 
-    def __init__(self) -> None:
-        self.base_url = settings.groq_base_url
-        self.api_key = settings.groq_api_key
-        self.model = settings.groq_model
+    def __init__(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: float = 60.0,
+        stream_timeout: float = 300.0,
+    ) -> None:
+        self.name = name
+        self.model = model
+        self._api_key = api_key
+        self._stream_timeout = stream_timeout
         self.client = httpx.AsyncClient(
-            base_url=self.base_url,
+            base_url=base_url,
             headers={
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
-            timeout=60.0,
+            timeout=timeout,
         )
-        # Streaming needs a longer timeout — responses can take minutes
-        self.stream_timeout = 300.0
 
     async def chat_completion(self, messages: list[dict]) -> dict:
-        """Send a chat completion request to Groq."""
+        """Send a non-streaming chat completion request."""
         payload = {
             "model": self.model,
             "messages": messages,
@@ -34,23 +45,22 @@ class GroqClient:
         return response.json()
 
     async def chat_completion_stream(self, messages: list[dict]):
-        """Stream a chat completion from Groq.
-
-        Yields parsed chunk dicts from the SSE response.
-        Each chunk has the form: {"id": ..., "choices": [{"delta": {...}, ...}], ...}
-        """
+        """Stream a chat completion. Yields parsed chunk dicts."""
         payload = {
             "model": self.model,
             "messages": messages,
             "stream": True,
         }
         async with self.client.stream(
-            "POST", "/chat/completions", json=payload, timeout=self.stream_timeout
+            "POST",
+            "/chat/completions",
+            json=payload,
+            timeout=self._stream_timeout,
         ) as response:
             if not response.is_success:
                 error_body = await response.aread()
                 raise RuntimeError(
-                    f"Groq API error {response.status_code}: {error_body.decode()}"
+                    f"{self.name} API error {response.status_code}: {error_body.decode()}"
                 )
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
@@ -64,6 +74,3 @@ class GroqClient:
 
     async def close(self) -> None:
         await self.client.aclose()
-
-
-groq_client = GroqClient()

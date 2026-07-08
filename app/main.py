@@ -3,16 +3,21 @@ from fastapi import FastAPI
 from prometheus_client import generate_latest
 from fastapi.responses import PlainTextResponse
 
+from app.config import settings
+from app.database import close_db, init_db
 from app.middleware.rate_limit import rate_limiter
-from app.proxy.groq_client import groq_client
+from app.providers.router import provider_router
 from app.routes import health, chat
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db(settings.database_path)
     await rate_limiter.init()
+    await provider_router.init()
     yield
-    await groq_client.close()
+    await provider_router.close()
+    close_db()
 
 
 app = FastAPI(title="LLM Ops Gateway", lifespan=lifespan)
