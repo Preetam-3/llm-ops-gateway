@@ -266,6 +266,40 @@ def _get_log_stats() -> dict:
     return dict(cursor.fetchone())
 
 
+def _get_cost_by_period(period: str = "day") -> list[dict]:
+    """Cumulative cost grouped by day or month."""
+    if period == "month":
+        date_expr = "strftime('%Y-%m', created_at)"
+    else:
+        date_expr = "date(created_at)"
+    cursor = _db.execute(
+        f"SELECT {date_expr} as period, "
+        "COUNT(*) as requests, "
+        "COALESCE(SUM(prompt_tokens), 0) as prompt_tokens, "
+        "COALESCE(SUM(completion_tokens), 0) as completion_tokens, "
+        "COALESCE(SUM(total_tokens), 0) as total_tokens, "
+        "COALESCE(SUM(estimated_cost), 0) as cost "
+        "FROM request_logs "
+        "GROUP BY period ORDER BY period DESC LIMIT 90"
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def _get_cost_by_model() -> list[dict]:
+    """Cumulative cost grouped by model."""
+    cursor = _db.execute(
+        "SELECT model, "
+        "COUNT(*) as requests, "
+        "COALESCE(SUM(prompt_tokens), 0) as prompt_tokens, "
+        "COALESCE(SUM(completion_tokens), 0) as completion_tokens, "
+        "COALESCE(SUM(total_tokens), 0) as total_tokens, "
+        "COALESCE(SUM(estimated_cost), 0) as cost "
+        "FROM request_logs WHERE model IS NOT NULL "
+        "GROUP BY model ORDER BY cost DESC"
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
 # ── Public async API ──
 
 
@@ -352,3 +386,11 @@ async def search_request_logs(
 
 async def get_log_stats() -> dict:
     return await asyncio.to_thread(_get_log_stats)
+
+
+async def get_cost_by_period(period: str = "day") -> list[dict]:
+    return await asyncio.to_thread(_get_cost_by_period, period)
+
+
+async def get_cost_by_model() -> list[dict]:
+    return await asyncio.to_thread(_get_cost_by_model)
