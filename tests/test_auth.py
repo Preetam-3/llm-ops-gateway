@@ -118,6 +118,44 @@ def test_revoke_no_auth(test_client):
     assert resp.status_code == 401
 
 
+# ── Key expiry ──
+
+
+def test_create_key_with_expiry(test_client):
+    resp = test_client.post(
+        "/v1/admin/keys",
+        json={"name": "ExpiryTest", "expires_at": "2099-12-31T23:59:59"},
+        headers=_ADMIN,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["expires_at"] == "2099-12-31T23:59:59"
+
+
+def test_create_key_no_expiry(test_client):
+    resp = test_client.post(
+        "/v1/admin/keys",
+        json={"name": "NoExpiry"},
+        headers=_ADMIN,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["expires_at"] is None
+
+
+def test_list_keys_shows_expiry(test_client):
+    test_client.post(
+        "/v1/admin/keys",
+        json={"name": "ExpList", "expires_at": "2099-12-31"},
+        headers=_ADMIN,
+    )
+    resp = test_client.get("/v1/admin/keys", headers=_ADMIN)
+    assert resp.status_code == 200
+    keys = resp.json()["keys"]
+    matching = [k for k in keys if k["name"] == "ExpList"]
+    assert len(matching) >= 1
+    assert "expires_at" in matching[0]
+
+
 # ── Admin dashboard ──
 
 

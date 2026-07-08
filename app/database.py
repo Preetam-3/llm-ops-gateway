@@ -66,6 +66,11 @@ def init_db(db_path: str) -> None:
         CREATE INDEX IF NOT EXISTS idx_request_logs_created ON request_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_request_logs_model ON request_logs(model);
     """)
+    # Add expires_at column if missing (schema migration)
+    try:
+        _db.execute("ALTER TABLE api_keys ADD COLUMN expires_at TIMESTAMP")
+    except Exception:
+        pass  # column already exists
     _db.commit()
 
 
@@ -141,23 +146,23 @@ def _get_messages(conv_id: str) -> list[dict]:
 # ── API key helpers ──
 
 
-def _create_api_key(name: str) -> dict:
+def _create_api_key(name: str, expires_at: str | None = None) -> dict:
     """Generate a key, store its hash, return the raw key (shown once)."""
     raw_key = "gw_" + secrets.token_hex(16)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     prefix = raw_key[:10]  # e.g. "gw_a1b2c3d4"
     key_id = str(uuid.uuid4())
     _db.execute(
-        "INSERT INTO api_keys (id, key_hash, name, prefix) VALUES (?, ?, ?, ?)",
-        (key_id, key_hash, name, prefix),
+        "INSERT INTO api_keys (id, key_hash, name, prefix, expires_at) VALUES (?, ?, ?, ?, ?)",
+        (key_id, key_hash, name, prefix, expires_at),
     )
     _db.commit()
-    return {"id": key_id, "raw_key": raw_key, "name": name, "prefix": prefix}
+    return {"id": key_id, "raw_key": raw_key, "name": name, "prefix": prefix, "expires_at": expires_at}
 
 
 def _list_api_keys() -> list[dict]:
     cursor = _db.execute(
-        "SELECT id, name, prefix, is_active, created_at, revoked_at "
+        "SELECT id, name, prefix, is_active, created_at, revoked_at, expires_at "
         "FROM api_keys ORDER BY created_at DESC"
     )
     return [dict(row) for row in cursor.fetchall()]
@@ -175,11 +180,17 @@ def _revoke_api_key(key_id: str) -> bool:
 
 def _get_api_key_by_hash(key_hash: str) -> dict | None:
     cursor = _db.execute(
-        "SELECT id, name, prefix, is_active FROM api_keys WHERE key_hash = ?",
+        "SELECT id, name, prefix, is_active, expires_at FROM api_keys WHERE key_hash = ?",
         (key_hash,),
     )
     row = cursor.fetchone()
-    return dict(row) if row else None
+    key_data = dict(row) if row else None
+    if key_data and key_data["expires_at"]:
+        from datetime import datetime
+        expires = datetime.fromisoformat(key_data["expires_at"])
+        if datetime.now() > expires:
+            key_data["is_active"] = 0  # expired
+    return key_data
 
 
 # ── Request log helpers ──
@@ -351,8 +362,8 @@ async def get_messages(conv_id: str) -> list[dict]:
     return await asyncio.to_thread(_get_messages, conv_id)
 
 
-async def create_api_key(name: str) -> dict:
-    return await asyncio.to_thread(_create_api_key, name)
+async def create_api_key(name: str, expires_at: str | None = None) -> dict:
+    return await asyncio.to_thread(_create_api_key, name, expires_at)
 
 
 async def list_api_keys() -> list[dict]:

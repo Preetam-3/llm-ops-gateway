@@ -17,12 +17,14 @@ async def create_key(request: Request):
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name field is required")
-    key = await create_api_key(name)
+    expires_at = body.get("expires_at") or None  # ISO 8601 string or null
+    key = await create_api_key(name, expires_at)
     return {
         "id": key["id"],
         "raw_key": key["raw_key"],
         "name": key["name"],
         "prefix": key["prefix"],
+        "expires_at": key.get("expires_at"),
         "warning": "Save this key — it will not be shown again.",
     }
 
