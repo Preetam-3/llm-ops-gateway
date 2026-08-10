@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check app/ tests/ chat.py
+      - run: ruff check app/ tests/ e2e/ chat.py
 
   test:
     runs-on: ubuntu-latest
