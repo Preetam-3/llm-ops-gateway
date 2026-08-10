@@ -15,6 +15,16 @@ class TokenBucketRateLimiter:
         if self.redis is None:
             return  # redis unavailable, allow through
 
+        try:
+            await self._check(request)
+        except HTTPException:
+            raise  # genuine rate-limit rejection
+        except Exception:
+            # Redis connection errors — degraded mode: allow requests through.
+            return
+
+    async def _check(self, request: Request) -> None:
+
         # Key-based rate limit
         api_key = request.headers.get("Authorization", "").removeprefix("Bearer ")
         key_key = f"rate_limit:key:{api_key}"
