@@ -9,9 +9,37 @@ service:
   type: NodePort
   port: 8000
 
+# Secrets for the gateway. Prefer setting these via `--set`
+# or a values override file; `existingSecret` lets you bring your
+# own Secret instead of the one rendered by secrets.yaml.
+secrets:
+  existingSecret: ""
+  groqApiKey: ""
+  gatewayApiKey: "change-me"
+
 config:
-  groqModel: llama3-8b-8192
+  groqModel: llama-3.1-8b-instant
   maxRequestsPerMinute: 30
+
+# Kubernetes production hardening
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: true
+  minAvailable: 1
 
 redis:
   image: redis:7.2
