@@ -9,7 +9,7 @@ from app.cache import cache_clear, close_cache, init_cache
 from app.config import settings
 from app.database import close_db, init_db
 from app.guardrails import init_guardrails
-from app.webhooks import init_webhook_client, send_notification
+from app.webhooks import close_webhook_client, init_webhook_client, send_notification
 from app.middleware.auth import verify_admin_key
 from app.middleware.rate_limit import rate_limiter
 from app.providers.router import provider_router
