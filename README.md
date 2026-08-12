@@ -100,6 +100,13 @@ That's it. No Kubernetes, no cloud setup needed.
 - Rate-limited request tracking
 - Filter by LLM model
 
+**Ops & Deployment**
+- Hardened Helm chart — HPA autoscaling, PodDisruptionBudget, resource limits, liveness/readiness probes
+- Terraform module — deploy a GKE cluster + the gateway in one `apply`
+- Response caching, content guardrails, and webhook notifications
+- Live end-to-end test suite (`e2e/`) for real LLM calls
+- MkDocs documentation site (`docs/`)
+
 ---
 
 ## Commands
@@ -110,6 +117,7 @@ make stop       # Stop everything
 make test       # Run tests
 make lint       # Lint Python code
 make build      # Build Docker image
+make docs       # Build + serve the documentation site (http://localhost:8001)
 make install    # Install 'chat' command system-wide ($HOME/.local/bin/chat)
 make clean      # Remove containers, volumes, .venv
 ./chat.py "..." # Send a message via CLI
@@ -143,6 +151,8 @@ chat -c <id> "message"  # Continue a specific conversation
 | Persistence | SQLite |
 | Container | Docker, Docker Compose |
 | Orchestration | Helm, Minikube *(optional)* |
+| Infrastructure | Terraform (GKE) |
+| Docs | MkDocs (Material theme) |
 | CI/CD | GitHub Actions, GitHub Container Registry |
 
 ---
@@ -165,11 +175,15 @@ chat -c <id> "message"  # Continue a specific conversation
 │   └── metrics/                # Prometheus metrics
 ├── grafana/                    # Dashboard + provisioning
 ├── prometheus/                 # Prometheus scrape config
-├── helm/                       # Kubernetes Helm chart
-├── tests/                      # Pytest suite
+├── helm/                       # Kubernetes Helm chart (HPA, PDB, probes)
+├── terraform/                  # GKE cluster + Helm deploy
+├── docs/                       # MkDocs documentation site
+├── tests/                      # Pytest unit suite
+├── e2e/                        # Live end-to-end tests (real LLM calls)
 ├── ui/                         # Optional HTML chat UI
 ├── assets/                     # Demo GIF and MP4
 ├── chat.py                     # CLI client
+├── mkdocs.yml                  # Docs site config
 ├── docker-compose.yml          # Local stack
 ├── Makefile                    # Common commands
 ├── setup.sh                    # Bootstrap script
@@ -177,13 +191,36 @@ chat -c <id> "message"  # Continue a specific conversation
 └── requirements.txt
 ```
 
-## Kubernetes Deployment
+## Deployment
 
-For production-style deployment:
+### Kubernetes (Helm) — production
+
+The chart includes HPA autoscaling, a PodDisruptionBudget, resource
+requests/limits, and liveness/readiness probes out of the box.
 
 ```bash
 minikube start
-helm install llm-gateway ./helm/
+helm install llm-gateway ./helm/ \
+  --set secrets.groqApiKey=gsk_your_key \
+  --set secrets.gatewayApiKey=your-admin-key \
+  --set image.repository=ghcr.io/your-username/llm-ops-gateway
 kubectl port-forward svc/llm-gateway-gateway 8000:8000
 kubectl port-forward svc/llm-gateway-grafana 4000:3000
+```
+
+### Cloud (Terraform / GKE)
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # set project_id + secrets
+terraform init && terraform apply
+```
+
+See `terraform/README.md` and the [docs site](docs) for full instructions.
+
+### Documentation
+
+```bash
+make docs       # build + serve at http://localhost:8001
+make docs-build # static site into site/
 ```
