@@ -1,6 +1,5 @@
 """Webhook notifications for gateway events (Slack-compatible)."""
 
-import json
 import logging
 
 import httpx
