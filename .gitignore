@@ -10,3 +10,13 @@ dist/
 CLAUDE.md
 project_status.md
 *.db
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfvars
+terraform/*.tfstate*
+terraform/*.tfplan
+
+# Docs build
+site/
+docs_venv/

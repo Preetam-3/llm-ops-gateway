@@ -1,4 +1,4 @@
-.PHONY: setup run stop test lint build chat logs clean install help
+.PHONY: setup run stop test lint build chat logs clean install docs help
 
 setup:           ## First-time setup: check deps, configure .env, create venv
 	@bash setup.sh
@@ -19,7 +19,7 @@ test:            ## Run test suite
 	.venv/bin/pytest -v
 
 lint:            ## Run linter
-	.venv/bin/ruff check app/ tests/ chat.py
+	.venv/bin/ruff check app/ tests/ e2e/ chat.py
 
 build:           ## Build Docker image
 	docker build -t llm-ops-gateway .
@@ -34,6 +34,14 @@ clean:           ## Remove containers, volumes, and temp files
 	docker compose down -v
 	rm -rf .venv __pycache__ .pytest_cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
+
+docs:            ## Build and serve the MkDocs documentation site
+	@command -v mkdocs >/dev/null 2>&1 || python3 -m pip install -q -r requirements-docs.txt
+	mkdocs serve
+
+docs-build:      ## Build static docs site into site/
+	@command -v mkdocs >/dev/null 2>&1 || python3 -m pip install -q -r requirements-docs.txt
+	mkdocs build
 
 install:         ## Install 'chat' command system-wide (symlink to ~/.local/bin)
 	mkdir -p $(HOME)/.local/bin
