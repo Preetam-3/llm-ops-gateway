@@ -1,0 +1,40 @@
+site_name: LLM Ops Gateway
+site_description: Self-hosted API gateway for LLMs with observability
+site_url: https://github.com/Preetam-3/llm-ops-gateway
+repo_url: https://github.com/Preetam-3/llm-ops-gateway
+repo_name: github.com/Preetam-3/llm-ops-gateway
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: teal
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: teal
+  features:
+    - navigation.top
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - Configuration: configuration.md
+  - Deployment: deployment.md
+  - API Reference: api-reference.md
