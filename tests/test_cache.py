@@ -1,9 +1,7 @@
 """Tests for response caching."""
-import json
 from unittest.mock import AsyncMock, patch
 
 from app.cache import _cache_key
-from app.providers.router import provider_router
 
 _ADMIN = {"Authorization": "Bearer test-key"}
 
