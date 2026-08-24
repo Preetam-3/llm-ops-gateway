@@ -1,0 +1,8 @@
+project_id           = "my-gcp-project"
+region               = "us-central1"
+cluster_name         = "llm-ops-gateway"
+release_name         = "llm-gateway"
+gateway_image        = "ghcr.io/your-username/llm-ops-gateway"
+gateway_image_tag    = "latest"
+groq_api_key         = "gsk_your_real_key_here"
+gateway_api_key      = "a-strong-admin-key"
